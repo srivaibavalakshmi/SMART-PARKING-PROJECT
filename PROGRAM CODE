@@ -1,0 +1,276 @@
+Data Collection and Sensor Interface:
+****Data Collection and Sensor Interface****
+
+import RPi.GPIO as GPIO
+import time
+
+# Set GPIO mode to BCM
+GPIO.setmode(GPIO.BCM)
+
+# Define GPIO pins for the sensor
+TRIGGER_PIN = 18
+ECHO_PIN = 24
+
+# Set up GPIO pins
+GPIO.setup(TRIGGER_PIN, GPIO.OUT)
+GPIO.setup(ECHO_PIN, GPIO.IN)
+
+# Function to trigger a distance measurement
+def trigger_measurement():
+    GPIO.output(TRIGGER_PIN, True)
+    time.sleep(0.00001)
+    GPIO.output(TRIGGER_PIN, False)
+
+# Function to measure the distance
+def measure_distance():
+    pulse_start = time.time()
+    pulse_end = time.time()
+
+    while GPIO.input(ECHO_PIN) == 0:
+        pulse_start = time.time()
+
+    while GPIO.input(ECHO_PIN) == 1:
+        pulse_end = time.time()
+
+    pulse_duration = pulse_end - pulse_start
+    distance = (pulse_duration * 34300) / 2  # Speed of sound is 343 m/s
+
+    return distance
+
+
+
+
+
+****Data Transmission to the Cloud/Mobile App Server****
+
+import requests
+# Define the server endpoint for data transmission
+SERVER_ENDPOINT = "http://example.com/api/parking"
+# Main loop for data collection and transmission
+try:
+    while True:
+        # Trigger a distance measurement
+        trigger_measurement()
+
+        # Measure the distance
+        distance = measure_distance()
+
+        # Send data to the server
+        data = {"distance": distance}
+        response = requests.post(SERVER_ENDPOINT, json=data)
+
+        if response.status_code == 200:
+            print(f"Data sent: Distance - {distance} cm")
+        else:
+            print("Data transmission failed")
+
+        # Adjust the data collection and transmission interval
+        time.sleep(5)
+except KeyboardInterrupt:
+    print("Data collection stopped by the user")
+finally:
+    # Clean up GPIO settings
+    GPIO.cleanup()
+
+WOWKI CODE :
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+LiquidCrystal_I2C lcd(0x27, 16, 2);  // Change the HEX address
+
+#include <Servo.h>
+Servo myservo1;
+
+int IR1 = 2;
+int IR2 = 4;
+int SmokeDetectorPin = 6;  // Digital pin for the smoke detector
+int BuzzerPin = 7;         // Digital pin for the buzzer
+
+int Slot = 4;  // Enter Total number of parking Slots
+
+bool flag1 = false;
+bool flag2 = false;
+
+unsigned long lastLcdUpdate = 0;  // Variable to track the time of the last LCD update
+unsigned long lcdUpdateInterval = 1000;  // Update the LCD every 1000 milliseconds (1 second)
+
+void setup() 
+{
+  lcd.begin(16, 2);  // Initialize LCD with 16 columns and 2 rows
+  lcd.backlight();
+  pinMode(IR1, INPUT);
+  pinMode(IR2, INPUT);
+  pinMode(SmokeDetectorPin, INPUT);
+  pinMode(BuzzerPin, OUTPUT);
+
+  myservo1.attach(3);
+  myservo1.write(100);
+
+  lcd.setCursor(0, 0);
+  lcd.print("     ARDUINO    ");
+  lcd.setCursor(0, 1);
+  lcd.print(" PARKING SYSTEM ");
+  delay(2000);
+  lcd.clear();
+  
+  Serial.begin(9600);  // Start serial communication for debugging
+}
+
+void loop() 
+{
+  if (digitalRead(IR1) == LOW && !flag1) 
+ {
+    if (Slot > 0) 
+    {
+      flag1 = true;
+      if (!flag2) 
+      {
+        myservo1.write(0);
+        Slot--;
+      }
+    } 
+   else 
+   {
+      displayMessage("    SORRY :(    ", "  Parking Full  ");
+    }
+  }
+
+  if (digitalRead(IR2) == LOW && !flag2)
+ {
+    flag2 = true;
+    if (!flag1) 
+   {
+      myservo1.write(0);
+      Slot++;
+    }
+  }
+
+  if (flag1 && flag2)
+ {
+    delay(1000);
+    myservo1.write(100);
+    Serial.println("Servo returned to initial position.");
+    flag1 = false;
+    flag2 = false;
+  }
+
+  // Update the LCD display with a delay
+  if (millis() - lastLcdUpdate >= lcdUpdateInterval) {
+    updateLcdDisplay();
+    lastLcdUpdate = millis();
+  }
+
+}
+
+void updateLcdDisplay() 
+{
+  if (digitalRead(SmokeDetectorPin) == HIGH) 
+{
+    displayMessage("   WARNING!   ", " Smoke Detected ");
+    digitalWrite(BuzzerPin, HIGH);  // Turn on the buzzer
+  } 
+else 
+{
+    displayMessage("    WELCOME!    ", "Slot Left: " + String(Slot));
+    digitalWrite(BuzzerPin, LOW);   // Turn off the buzzer
+  }
+}
+
+void displayMessage(const char *line1, const String &line2) 
+{
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(line1);
+  lcd.setCursor(0, 1);
+  lcd.print(line2);
+}
+
+
+
+DESIGN INTERFACE
+Code :
+import 'package:flutter/material.dart';
+void main() {
+  runApp(ParkingAvailabilityApp());
+}
+
+class ParkingAvailabilityApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: ParkingAvailabilityScreen(),
+    );
+  }
+}
+
+class ParkingAvailabilityScreen extends StatefulWidget {
+  @override
+  _ParkingAvailabilityScreenState createState() => _ParkingAvailabilityScreenState();
+}
+
+class _ParkingAvailabilityScreenState extends State<ParkingAvailabilityScreen> {
+  // State variables and methods to display parking availability data.
+  
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Parking Availability'),
+      ),
+      body: //  UI to display parking availability data goes here,
+    );
+  }
+}
+
+FETCH AND DISPLAY REAL TIME DATA 
+Code :
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+Future<Map<String, dynamic>> fetchParkingAvailabilityData() async {
+  final response = await http.get('http://your-raspberry-pi-ip/parking_data');
+  if (response.statusCode == 200) {
+    return json.decode(response.body);
+  } else {
+    throw Exception('Failed to load parking availability data');
+  }
+}
+// fetchParkingAvailabilityData to update the UI with parking data. 
+
+
+PARKING OCCUPANCY DETECTION USING PYTHON
+Code :
+import RPi.GPIO as GPIO
+import time
+
+# Set up GPIO pins
+GPIO.setmode(GPIO.BCM)
+TRIG = 18
+ECHO = 17
+GPIO.setup(TRIG, GPIO.OUT)
+GPIO.setup(ECHO, GPIO.IN)
+
+# Simulate parking occupancy detection
+try:
+    while True:
+        GPIO.output(TRIG, False)
+        time.sleep(2)
+
+        GPIO.output(TRIG, True)
+        time.sleep(0.00001)
+        GPIO.output(TRIG, False)
+
+        while GPIO.input(ECHO) == 0:
+            pulse_start = time.time()
+
+        while GPIO.input(ECHO) == 1:
+            pulse_end = time.time()
+
+        pulse_duration = pulse_end - pulse_start
+        distance = pulse_duration * 17150
+
+        if distance < 20:
+            print("Parking Occupied")
+        else:
+            print("Parking Available")
+
+except KeyboardInterrupt:
+    GPIO.cleanup()
